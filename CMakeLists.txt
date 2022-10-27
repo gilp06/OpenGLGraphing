@@ -22,7 +22,7 @@ target_sources(IMGUI
         ${IMGUI_INCLUDE_PATH}/imgui_tables.cpp
         ${IMGUI_INCLUDE_PATH}/imgui_widgets.cpp
         ${IMGUI_INCLUDE_PATH}/imgui.cpp
-
+        ${IMGUI_INCLUDE_PATH}/misc/cpp/imgui_stdlib.cpp
         PRIVATE
         ${IMGUI_INCLUDE_PATH}/backends/imgui_impl_opengl3.cpp
         ${IMGUI_INCLUDE_PATH}/backends/imgui_impl_glfw.cpp
@@ -45,10 +45,11 @@ include_directories(
         ${IMPLOT_INCLUDE_PATH}
         ${IMGUI_INCLUDE_PATH}
         ${IMGUI_INCLUDE_PATH}/backends
+        ${IMGUI_INCLUDE_PATH}/misc/cpp
 )
 
 link_directories(${PROJECT_SOURCE_DIR}/glfw/lib-mingw-w64)
 
-add_executable(opengl main.cpp glad.c Shader.cpp Shader.hpp)
+add_executable(opengl main.cpp glad.c Shader.cpp Shader.hpp Parser.cpp Parser.hpp)
 
 target_link_libraries(opengl mingw32 ${PROJECT_SOURCE_DIR}/libs/glfw/lib-mingw-w64/libglfw3.a opengl32 IMGUI IMPLOT)

@@ -5,9 +5,11 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "imgui_stdlib.h"
 #include "Shader.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
+#include "Parser.hpp"
 
 const char* vertex_source = R"glsl(
     #version 150 core
@@ -55,6 +57,7 @@ float offsetY{0.0f};
 
 float mouseX;
 float mouseY;
+float yValAtCursor;
 float base_speed = 5.0f;
 
 
@@ -63,8 +66,9 @@ float base_speed = 5.0f;
 
 void process_input(GLFWwindow* window, float dt);
 glm::vec2 CursorToOrtho(float x, float y, float min_x, float max_x, float min_y, float max_y);
-void set_vertices(GLuint program);
-
+void set_vertices(GLuint program, const std::string &rpn, GLuint &vao, GLuint &vbo);
+void set_axis_vertices(GLuint program,  GLuint &vao, GLuint &vbo);
+void set_position_vertices(GLuint program, GLuint &vao, GLuint &vbo);
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 {
     glm::vec2 mouse_pos = CursorToOrtho(xpos, ypos, VIEW_X_MIN, VIEW_X_MAX, VIEW_Y_MIN, VIEW_Y_MAX);
@@ -122,22 +126,38 @@ int main(int argc, char** argv)
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    GLuint vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
+    GLuint graph_vao;
+    glGenVertexArrays(1, &graph_vao);
 
-    GLuint vbo;
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    GLuint graph_vbo;
+    glGenBuffers(1, &graph_vbo);
+
+    GLuint axis_vao;
+    glGenVertexArrays(1, &axis_vao);
+
+    GLuint axis_vbo;
+    glGenVertexArrays(1, &axis_vao);
+
+    GLuint pos_vao;
+    glGenVertexArrays(1, &pos_vao);
+
+    GLuint pos_vbo;
+    glGenVertexArrays(1, &pos_vbo);
+
+
 
     Shader line_shader;
     line_shader.Compile(vertex_source, fragment_source);
     line_shader.Use();
 
-    set_vertices(line_shader.ID);
-    glm::vec4 line_color = {1.0, 1.0, 1.0, 1.0};
+    glm::vec4 line_color = {1.0, 0.0, 0.0, 1.0};
     glm::vec4 bg_color = {0.0, 0.0, 0.0, 1.0};
+    glm::vec4 axis_color = {1.0, 1.0, 1.0, 1.0};
+    std::string expression = "x 2 ^";
     float line_width = 1.0f;
+
+    set_vertices(line_shader.ID, expression, graph_vao, graph_vbo);
+
 
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
@@ -158,15 +178,28 @@ int main(int argc, char** argv)
         float x_values[2] = {VIEW_X_MIN, VIEW_X_MAX};
         float y_values[2] = {VIEW_Y_MIN, VIEW_Y_MAX};
 
-        set_vertices(line_shader.ID);
 
         glm::mat4 projection = glm::ortho<float>(VIEW_X_MIN, VIEW_X_MAX,  VIEW_Y_MIN, VIEW_Y_MAX, -1.0f, 1.0f);
         line_shader.SetUniformMatrix4fv("proj", projection);
 
+        set_axis_vertices(line_shader.ID, axis_vao,axis_vbo);
+        line_shader.SetUniform4f("incolor", axis_color);
+        glDrawArrays(GL_LINE_STRIP, 0, 5);
 
         line_shader.SetUniform4f("incolor", line_color);
-
+        set_vertices(line_shader.ID, expression, graph_vao, graph_vbo);
         glDrawArrays(GL_LINE_STRIP, 0, NUMPOINTS);
+
+
+
+
+
+
+
+
+
+
+
         ImGui::SetNextWindowPos(ImVec2(0,0));
         ImGui::SetNextWindowSize(ImVec2(window_width * settings_ratio, window_height));
         ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse);
@@ -179,14 +212,13 @@ int main(int argc, char** argv)
             {
                 ImGui::ColorPicker4("Line Color", glm::value_ptr(line_color));
                 ImGui::ColorPicker4("Background Color", glm::value_ptr(bg_color));
+                ImGui::ColorPicker4("Axis Color", glm::value_ptr(axis_color));
                 ImGui::TreePop();
             }
             ImGui::TreePop();
         }
 
         ImGui::Text("Viewport: ");
-
-
         if(ImGui::InputFloat2("X Range: ", x_values))
         {
             VIEW_X_MIN = x_values[0];
@@ -197,9 +229,8 @@ int main(int argc, char** argv)
             VIEW_Y_MIN = y_values[0];
             VIEW_Y_MAX = y_values[1];
         }
-
-        ImGui::Text("%.1f, %.1f", mouseX, mouseY);
-
+        ImGui::InputText("Y=", &expression);
+        ImGui::Text("(%.1f, %.1f)", mouseX, yValAtCursor);
         ImGui::End();
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -262,9 +293,12 @@ glm::vec2 CursorToOrtho(float x, float y, float min_x, float max_x, float min_y,
 
 
 
-void set_vertices(GLuint program) {
-    float vertices[NUMPOINTS * 2];
+void set_vertices(GLuint program, const std::string &rpn, GLuint &vao, GLuint &vbo) {
+    yValAtCursor = Parser::RPNToFloat(rpn, mouseX);
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
+    float vertices[NUMPOINTS * 2];
     for(int i = 0; i < NUMPOINTS * 2; i++)
     {
         if(i % 2 == 0)
@@ -276,12 +310,38 @@ void set_vertices(GLuint program) {
         else
         {
             auto x = vertices[i - 1];
-            vertices[i] = cbrt(x);
+            vertices[i] = Parser::RPNToFloat(rpn, x);
         }
     }
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(glGetAttribLocation(program, "position"), 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glEnableVertexAttribArray(0);
+}
+
+void set_axis_vertices(GLuint program, GLuint &vao, GLuint &vbo) {
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+    float vertices[10];
+
+    vertices[0] = VIEW_X_MIN;
+    vertices[1] = 0;
+    vertices[2] = VIEW_X_MAX;
+    vertices[3] = 0;
+    vertices[4] = 0;
+    vertices[5] = 0;
+    vertices[6] = 0;
+    vertices[7] = VIEW_Y_MAX;
+    vertices[8] = 0;
+    vertices[9] = VIEW_Y_MIN;
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof (vertices), vertices, GL_STATIC_DRAW);
 
     GLint pos_attribute = glGetAttribLocation(program, "position");
     glVertexAttribPointer(pos_attribute, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-    glEnableVertexAttribArray(pos_attribute);
+    glEnableVertexAttribArray(0);
+}
+
+void set_position_vertices(GLuint program, GLuint &vao, GLuint &vbo) {
+    glBindVertexArray(vao);
 }
