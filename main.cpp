@@ -9,8 +9,8 @@
 #include "Shader.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
+#include <vector>
 #include "Parser.hpp"
-
 const char* vertex_source = R"glsl(
     #version 150 core
     in vec2 position;
@@ -136,13 +136,13 @@ int main(int argc, char** argv)
     glGenVertexArrays(1, &axis_vao);
 
     GLuint axis_vbo;
-    glGenVertexArrays(1, &axis_vao);
+    glGenBuffers(1, &axis_vbo);
 
     GLuint pos_vao;
     glGenVertexArrays(1, &pos_vao);
 
     GLuint pos_vbo;
-    glGenVertexArrays(1, &pos_vbo);
+    glGenBuffers(1, &pos_vbo);
 
 
 
@@ -153,9 +153,11 @@ int main(int argc, char** argv)
     glm::vec4 line_color = {1.0, 0.0, 0.0, 1.0};
     glm::vec4 bg_color = {0.0, 0.0, 0.0, 1.0};
     glm::vec4 axis_color = {1.0, 1.0, 1.0, 1.0};
+    glm::vec4 pos_color = {0.2, 0.2, 0.2, 0.5};
     std::string expression = "x 2 ^";
     float line_width = 1.0f;
-
+    int numExpressions = 0;
+    std::vector<std::string> expressions;
     set_vertices(line_shader.ID, expression, graph_vao, graph_vbo);
 
 
@@ -184,19 +186,19 @@ int main(int argc, char** argv)
 
         set_axis_vertices(line_shader.ID, axis_vao,axis_vbo);
         line_shader.SetUniform4f("incolor", axis_color);
-        glDrawArrays(GL_LINE_STRIP, 0, 5);
-
-        line_shader.SetUniform4f("incolor", line_color);
-        set_vertices(line_shader.ID, expression, graph_vao, graph_vbo);
-        glDrawArrays(GL_LINE_STRIP, 0, NUMPOINTS);
+        glDrawArrays(GL_LINES, 0, 4);
 
 
+        for(std::string e : expressions)
+        {
+            line_shader.SetUniform4f("incolor", line_color);
+            set_vertices(line_shader.ID, e, graph_vao, graph_vbo);
+            glDrawArrays(GL_LINE_STRIP, 0, NUMPOINTS);
+        }
 
-
-
-
-
-
+        line_shader.SetUniform4f("incolor", pos_color);
+        set_position_vertices(line_shader.ID, pos_vao, pos_vbo);
+        glDrawArrays(GL_LINES, 0, 4);
 
 
 
@@ -229,8 +231,36 @@ int main(int argc, char** argv)
             VIEW_Y_MIN = y_values[0];
             VIEW_Y_MAX = y_values[1];
         }
-        ImGui::InputText("Y=", &expression);
+
+        if(ImGui::Button("Add"))
+        {
+            numExpressions++;
+            expressions.emplace_back();
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("Remove") && numExpressions > 0)
+        {
+            numExpressions--;
+            expressions.pop_back();
+        }
+        for(int i = 0; i < numExpressions; i++)
+        {
+
+            ImGui::Text("Y%d=", i);
+            ImGui::SameLine();
+            ImGui::InputText(" ", &expressions.at(i));
+        }
+
+
+
+
+
+
+
+
+
         ImGui::Text("(%.1f, %.1f)", mouseX, yValAtCursor);
+        ImGui::Text("(%.1f, %.1f)", mouseX, mouseY);
         ImGui::End();
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -278,6 +308,7 @@ void process_input(GLFWwindow* window, float dt)
 glm::vec2 CursorToOrtho(float x, float y, float min_x, float max_x, float min_y, float max_y)
 {
     float newX = x, newY = y;
+
     newX -= window_width * settings_ratio;
     if(newX < 0)
     {
@@ -285,7 +316,7 @@ glm::vec2 CursorToOrtho(float x, float y, float min_x, float max_x, float min_y,
     }
 
     float converted_x = min_x + (max_x-min_x) * (newX / (window_width * (1.0-settings_ratio)));
-    float converted_y = min_y + (max_y-min_y) * (newY / (window_height));
+    float converted_y = min_y + (max_y-min_y) * ((window_height - newY) / (window_height));
 
 
     return {converted_x, converted_y};
@@ -322,18 +353,16 @@ void set_axis_vertices(GLuint program, GLuint &vao, GLuint &vbo) {
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-    float vertices[10];
+    float vertices[8];
 
-    vertices[0] = VIEW_X_MIN;
-    vertices[1] = 0;
-    vertices[2] = VIEW_X_MAX;
-    vertices[3] = 0;
-    vertices[4] = 0;
+    vertices[0] = 0;
+    vertices[1] = VIEW_Y_MAX;
+    vertices[2] = 0;
+    vertices[3] = VIEW_Y_MIN;
+    vertices[4] = VIEW_X_MIN;
     vertices[5] = 0;
-    vertices[6] = 0;
-    vertices[7] = VIEW_Y_MAX;
-    vertices[8] = 0;
-    vertices[9] = VIEW_Y_MIN;
+    vertices[6] = VIEW_X_MAX;
+    vertices[7] = 0;
 
     glBufferData(GL_ARRAY_BUFFER, sizeof (vertices), vertices, GL_STATIC_DRAW);
 
@@ -344,4 +373,19 @@ void set_axis_vertices(GLuint program, GLuint &vao, GLuint &vbo) {
 
 void set_position_vertices(GLuint program, GLuint &vao, GLuint &vbo) {
     glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+    float vertices[8];
+    vertices[0] = mouseX;
+    vertices[1] = VIEW_Y_MAX;
+    vertices[2] = mouseX;
+    vertices[3] = VIEW_Y_MIN;
+    vertices[4] = VIEW_X_MIN;
+    vertices[5] = mouseY;
+    vertices[6] = VIEW_X_MAX;
+    vertices[7] = mouseY;
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(glGetAttribLocation(program, "position"), 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glEnableVertexAttribArray(0);
 }
