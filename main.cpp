@@ -8,9 +8,14 @@
 #include "imgui_stdlib.h"
 #include "Shader.hpp"
 #include <glm/gtc/type_ptr.hpp>
+#include "Parser.hpp"
+
 #include <iostream>
 #include <vector>
-#include "Parser.hpp"
+#include <map>
+#include <sstream>
+
+
 const char* vertex_source = R"glsl(
     #version 150 core
     in vec2 position;
@@ -154,11 +159,9 @@ int main(int argc, char** argv)
     glm::vec4 bg_color = {0.0, 0.0, 0.0, 1.0};
     glm::vec4 axis_color = {1.0, 1.0, 1.0, 1.0};
     glm::vec4 pos_color = {0.2, 0.2, 0.2, 0.5};
-    std::string expression = "x 2 ^";
+    std::string inExps;
     float line_width = 1.0f;
-    int numExpressions = 0;
-    std::vector<std::string> expressions;
-    set_vertices(line_shader.ID, expression, graph_vao, graph_vbo);
+    int expCount{0};
 
 
     /* Loop until the user closes the window */
@@ -188,18 +191,24 @@ int main(int argc, char** argv)
         line_shader.SetUniform4f("incolor", axis_color);
         glDrawArrays(GL_LINES, 0, 4);
 
-
-        for(std::string e : expressions)
+        line_shader.SetUniform4f("incolor", line_color);
+        std::istringstream input(inExps);
+        for(std::string line; std::getline(input, line);)
         {
-            line_shader.SetUniform4f("incolor", line_color);
-            set_vertices(line_shader.ID, e, graph_vao, graph_vbo);
+            set_vertices(line_shader.ID, line, graph_vao, graph_vbo);
             glDrawArrays(GL_LINE_STRIP, 0, NUMPOINTS);
         }
+
+
+
+
+
+
+
 
         line_shader.SetUniform4f("incolor", pos_color);
         set_position_vertices(line_shader.ID, pos_vao, pos_vbo);
         glDrawArrays(GL_LINES, 0, 4);
-
 
 
         ImGui::SetNextWindowPos(ImVec2(0,0));
@@ -207,7 +216,7 @@ int main(int argc, char** argv)
         ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse);
         if(ImGui::TreeNode("Settings"))
         {
-            ImGui::SliderInt("Num Pts", &NUMPOINTS, 1, 100000, "%d", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::SliderInt("Num Pts", &NUMPOINTS, 1, 1000, "%d", ImGuiSliderFlags_AlwaysClamp);
             ImGui::SliderFloat("Line Thickness", &line_width, 1.0f, 10.0f, "%.1f");
             ImGui::InputFloat("Viewport Speed", &base_speed, 1.0f);
             if(ImGui::TreeNode("Color Options"))
@@ -232,30 +241,7 @@ int main(int argc, char** argv)
             VIEW_Y_MAX = y_values[1];
         }
 
-        if(ImGui::Button("Add"))
-        {
-            numExpressions++;
-            expressions.emplace_back();
-        }
-        ImGui::SameLine();
-        if(ImGui::Button("Remove") && numExpressions > 0)
-        {
-            numExpressions--;
-            expressions.pop_back();
-        }
-        for(int i = 0; i < numExpressions; i++)
-        {
-
-            ImGui::Text("Y%d=", i);
-            ImGui::SameLine();
-            ImGui::InputText(" ", &expressions.at(i));
-        }
-
-
-
-
-
-
+        ImGui::InputTextMultiline("Insert Expressions: ", &inExps);
 
 
 
@@ -329,13 +315,15 @@ void set_vertices(GLuint program, const std::string &rpn, GLuint &vao, GLuint &v
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
+
+
     float vertices[NUMPOINTS * 2];
     for(int i = 0; i < NUMPOINTS * 2; i++)
     {
         if(i % 2 == 0)
         {
             const int value_range = (VIEW_X_MAX) - (VIEW_X_MIN);
-            float value_gap = (float) value_range / (NUMPOINTS * 2);
+            float value_gap = (float) value_range / (NUMPOINTS);
             vertices[i] = (VIEW_X_MIN) + i * value_gap;
         }
         else
